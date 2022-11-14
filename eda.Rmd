@@ -4,7 +4,95 @@ output: html_document
 date: "`r Sys.Date()`"
 ---
 
+Analyze midpoint temps to see if it’s a reasonable replacement for average temp.
+Make scatterplots by prediction station, time of year to make sure relationship is always reasonably strong.
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(lubridate)
 library(tidyverse)
+opts_chunk$set(echo = TRUE)
 ```
+
+```{r, warning=FALSE}
+data <- dir("data/raw/stations/", full.names = TRUE) %>%
+  map_dfr(read_csv, id = "station2", show_col_types = FALSE) %>%
+  mutate(station2 = map_chr(station2, ~ str_sub(basename(.x), 1, 4)))
+```
+
+Some stations have far fewer rows than the others.
+```{r}
+data %>%
+  count(station2, sort = TRUE) %>%
+  kable(
+    col.names = c("Station", "Number of Rows"),
+    format.args = list(big.mark = ",")
+  )
+```
+
+KDEN and KMIC are missing observations for most years.
+```{r}
+data %>%
+  mutate(
+    date_year = year(date), date_month = month(date), date_day = day(date)
+  ) %>%
+  group_by(station2, date_month, date_day) %>%
+  summarize(num_years = n_distinct(date_year)) %>%
+  ungroup() %>%
+  mutate(date = make_date(month = date_month, day = date_day)) %>%
+  ggplot(aes(date, num_years)) +
+  facet_wrap(vars(station2)) +
+  geom_line() +
+  labs(x = "Date", y = "Number Of Years Date Is In") +
+  theme_bw()
+```
+
+KDEN and KMIC data don't go back as far as the data for the other stations.
+```{r}
+data %>%
+  filter(station2 %in% c("KDEN", "KMIC")) %>%
+  group_by(station2) %>%
+  summarize(min_date = min(date))
+```
+
+
+```{r}
+data %>%
+  mutate(date_year = update(date, months = 1, days = 1)) %>%
+  select(where(is.double) & !date) %>%
+  group_by(date_year) %>%
+  summarize(across(.fns = ~ mean(is.na(.x)))) %>%
+  pivot_longer(cols = !date_year, names_to = "var", values_to = "prop_na") %>%
+  ggplot(aes(date_year, prop_na)) +
+  facet_wrap(vars(var)) +
+  geom_line() +
+  labs(x = "Year", y = "Proportion Missing") +
+  theme_bw()
+```
+
+```{r}
+data %>%
+  mutate(date_year = update(date, months = 1, days = 1)) %>%
+  select(station2, where(is.double) & !date) %>%
+  group_by(station2, date_year) %>%
+  summarize(across(.fns = ~ mean(is.na(.x)))) %>%
+  ungroup() %>%
+  pivot_longer(
+    cols = !c(station2, date_year), names_to = "var", values_to = "prop_na"
+  ) %>%
+  ggplot(aes(date_year, prop_na, color = station2)) +
+  facet_wrap(vars(var)) +
+  geom_line() +
+  labs(x = "Year", y = "Proportion Missing") +
+  theme_bw()
+```
+
+```{r}
+data %>%
+  mutate(midpoint = (TMIN + TMAX) / 2) %>%
+  ggplot(aes(midpoint, TAVG)) +
+  facet_wrap(vars(station2)) +
+  geom_point() +
+  theme_bw()
+```
+
