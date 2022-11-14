@@ -1,0 +1,10 @@
+---
+title: "STATS 604 - Project 4 EDA"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
